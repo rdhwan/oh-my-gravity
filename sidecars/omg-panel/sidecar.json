@@ -1,0 +1,18 @@
+{
+  "command": "node",
+  "args": ["main.mjs"],
+  "restart_policy": "always",
+  "display_name": "OMG Orchestrator",
+  "description": "Live context & input/output/cached token monitor, milestone todo tracker, and subagent model configurator.",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "OMG Orchestrator",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "OMG Orchestrator"
+      }
+    ]
+  }
+}

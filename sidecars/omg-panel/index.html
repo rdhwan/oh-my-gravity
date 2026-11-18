@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMG Orchestrator</title>
+<script src="/preload.js"></script>
+<style>
+  :root {
+    --c-system: #9aa0a6;
+    --c-user: #a8c7fa;
+    --c-agent: #4c8df6;
+    --c-tool: #f9ab00;
+    --c-custom: #c58af9;
+    --c-sysmsg: #f28b82;
+    --c-ok: #81c995;
+    --c-warn: #f9ab00;
+    --c-err: #f28b82;
+    --c-accent: #8ab4f8;
+    --fg: var(--foreground, #e3e3e3);
+    --dim: var(--muted-foreground, #9aa0a6);
+    --line: var(--border, rgba(127, 127, 127, 0.25));
+    --card: color-mix(in srgb, var(--fg) 4%, transparent);
+    --empty: color-mix(in srgb, var(--dim) 28%, transparent);
+    --select-bg: #202124;
+    --select-fg: var(--fg);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--fg);
+    font: 12.5px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--dim) 30%, transparent);
+    border: 2.5px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  main { padding: 12px 13px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .dim { color: var(--dim); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Brand & Header */
+  .brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .brand-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .brand-logo { width: 22px; height: 22px; border-radius: 5px; object-fit: cover; flex: none; }
+  .brand-title { font-size: 13px; font-weight: 650; letter-spacing: -0.01em; }
+
+  /* Cards & Sections */
+  section.card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 12px;
+    background: var(--card);
+  }
+  .sec-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .sec-head h2 {
+    margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--dim);
+  }
+  .hint { font-size: 11px; color: var(--dim); }
+
+  /* Context Usage */
+  .ctx-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .ctx-model { font-size: 12px; font-weight: 550; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-pct { font-size: 12px; font-weight: 650; color: var(--c-accent); flex: none; }
+  .ctx-nums { display: flex; align-items: baseline; gap: 5px; margin-bottom: 8px; }
+  .ctx-nums .big { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; }
+  .ctx-bar {
+    display: flex; width: 100%; height: 8px; border-radius: 999px;
+    overflow: hidden; background: var(--empty); gap: 1.5px; margin-bottom: 7px;
+  }
+  .ctx-seg { height: 100%; min-width: 3px; transition: width 0.25s ease; }
+  .ctx-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--dim); margin-bottom: 10px; }
+  .ctx-leg-item { display: inline-flex; align-items: center; gap: 4px; }
+  .ctx-leg-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+
+  /* Token I/O & Cache Stats */
+  .io-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px; }
+  .io-box {
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px;
+    background: color-mix(in srgb, var(--fg) 2%, transparent);
+  }
+  .io-title { font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .io-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px 8px; font-size: 11.5px; }
+  .io-kv { display: flex; justify-content: space-between; gap: 4px; }
+  .io-kv .k { color: var(--dim); }
+  .io-kv .v { font-weight: 600; }
+
+  details.fold { margin-top: 6px; border-top: 1px solid var(--line); padding-top: 6px; }
+  details.fold summary { cursor: pointer; font-size: 11.5px; color: var(--dim); user-select: none; }
+  details.fold summary:hover { color: var(--fg); }
+  .cat-row { display: grid; grid-template-columns: 10px 1fr auto 40px; align-items: center; gap: 7px; padding: 2px 0; font-size: 11.5px; }
+  .mark { width: 7px; height: 7px; border-radius: 50%; }
+  .mark.sq { border-radius: 2px; }
+  .mark.free { background: transparent; border: 1.5px solid var(--empty); }
+
+  /* Todos & Milestones */
+  .agents-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .agent-chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  }
+  .agent-chip.running { border-color: color-mix(in srgb, var(--c-warn) 55%, transparent); color: var(--c-warn); }
+  .agent-chip.done { border-color: color-mix(in srgb, var(--c-ok) 45%, transparent); color: var(--c-ok); }
+
+  .topic-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  select, button {
+    font: inherit; font-size: 11.5px; color: var(--fg);
+    background-color: color-mix(in srgb, var(--fg) 6%, transparent);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px;
+  }
+  select {
+    max-width: 100%;
+    background-color: var(--select-bg);
+    color: var(--select-fg);
+  }
+  select option {
+    background-color: var(--select-bg);
+    color: var(--select-fg);
+  }
+  button { cursor: pointer; color: var(--dim); }
+  button:hover { color: var(--fg); border-color: var(--dim); }
+
+  .prog-wrap { height: 5px; border-radius: 999px; background: var(--empty); overflow: hidden; margin-bottom: 8px; }
+  .prog-fill { height: 100%; background: var(--c-ok); transition: width 0.2s ease; }
+
+  .ms-card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; margin-bottom: 7px; }
+  .ms-card:last-child { margin-bottom: 0; }
+  .ms-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; cursor: pointer; }
+  .ms-title { font-weight: 600; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ms-meta { display: flex; align-items: center; gap: 6px; flex: none; }
+  .pill {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px; color: var(--dim);
+  }
+  .pill.in_progress { color: var(--c-warn); border-color: color-mix(in srgb, var(--c-warn) 50%, transparent); }
+  .pill.verifying { color: var(--c-accent); border-color: color-mix(in srgb, var(--c-accent) 50%, transparent); }
+  .pill.done { color: var(--c-ok); border-color: color-mix(in srgb, var(--c-ok) 50%, transparent); }
+  .pill.blocked { color: var(--c-err); border-color: color-mix(in srgb, var(--c-err) 50%, transparent); }
+  .ms-goal { font-size: 11.5px; color: var(--dim); margin: 4px 0 6px; }
+  .todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .todo-item { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; }
+  .todo-item input[type="checkbox"] { margin: 2px 0 0; cursor: pointer; accent-color: var(--c-ok); }
+  .todo-label { flex: 1; min-width: 0; }
+  .todo-label.done { text-decoration: line-through; color: var(--dim); }
+  .todo-role { font-size: 10px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; flex: none; }
+  .todo-note { display: block; font-size: 11px; color: var(--dim); }
+
+  /* Configurator */
+  .cfg-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 3px 8px; background: transparent; }
+  .seg button.active { background: color-mix(in srgb, var(--c-accent) 20%, transparent); color: var(--fg); font-weight: 600; }
+  .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cfg-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
+  .role-list { display: flex; flex-direction: column; gap: 7px; }
+  .role-item { border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
+  .role-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+  .role-name { font-weight: 600; font-size: 12px; text-transform: capitalize; }
+  .role-desc { font-size: 10.5px; color: var(--dim); }
+  .role-controls { display: grid; grid-template-columns: 1fr auto; gap: 5px; align-items: center; }
+  .tier-badge { font-size: 10.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+  .cfg-warn { font-size: 11px; color: var(--c-warn); margin-top: 3px; }
+  .cfg-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 8px; }
+  .save-msg { font-size: 11px; color: var(--c-ok); }
+  .empty { margin: 8px 0; color: var(--dim); font-size: 12px; }
+
+  /* Multi-agent selector & breakdown */
+  .agent-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .agent-bar select { flex: 1; min-width: 0; font-size: 11.5px; }
+  .agent-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+  .agent-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 11.5px;
+    cursor: pointer; background: color-mix(in srgb, var(--fg) 2%, transparent);
+  }
+  .agent-row:hover { border-color: var(--dim); }
+  .agent-row-main { min-width: 0; flex: 1; }
+  .agent-row-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-row-sub { font-size: 10.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-row-stats { text-align: right; flex: none; font-size: 11px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <div class="brand-left">
+      <img class="brand-logo" src="/logos/omg.png" alt="OMG" onerror="this.style.display='none'">
+      <span class="brand-title">oh-my-gravity</span>
+    </div>
+  </div>
+
+  <!-- 1. Context & Token Usage -->
+  <section class="card" id="ctxSection">
+    <div class="sec-head">
+      <h2>Context &amp; Token Usage</h2>
+      <span class="hint" id="ctxUpdated">—</span>
+    </div>
+    <div id="ctxBody"><p class="empty">Waiting for conversation…</p></div>
+  </section>
+
+  <!-- 2. Milestone & Sub-Todo Tracker -->
+  <section class="card" id="todoSection">
+    <div class="sec-head">
+      <h2>Milestones &amp; Todos</h2>
+      <span class="hint" id="todoSummary">0/0</span>
+    </div>
+    <div id="todoBody"><p class="empty">No active plan yet. Run /omg-orchestrator or /omg-plan.</p></div>
+  </section>
+
+  <!-- 3. Model Configurator -->
+  <section class="card" id="cfgSection">
+    <div class="sec-head">
+      <h2>Agent &amp; Model Config</h2>
+      <span class="hint" id="cfgCatalogHint">Catalog</span>
+    </div>
+    <div id="cfgBody"><p class="empty">Loading configuration…</p></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const POLL_MS = 3000;
+  const SEGMENT_COLORS = ['var(--c-system)', 'var(--c-user)', 'var(--c-agent)', 'var(--c-tool)', 'var(--c-custom)'];
+  const CONVERSATION = { user: 'var(--c-user)', agent: 'var(--c-agent)', tool: 'var(--c-tool)', system_messages: 'var(--c-sysmsg)' };
+  const SYSTEM = new Set(['system_prompt', 'system_tools', 'system_overhead']);
+  const DEFAULT_ROLES = ['orchestrator', 'plan', 'explore', 'documents', 'build', 'oracle'];
+  const ROLE_HINTS = {
+    orchestrator: 'Strong coordinator & planner (active chat model)',
+    plan: 'Milestone decomposition & architecture',
+    explore: 'Cheap, fast codebase & docs scout',
+    documents: 'Markdown & plans/ writer',
+    build: 'Mid-tier scoped milestone builder',
+    oracle: 'High-reasoning verifier & reviewer',
+  };
+
+  const params = new URLSearchParams(location.search);
+  const conversationId = (window.sidecar && window.sidecar.conversationId) || params.get('conversationId') || '';
+  const doFetch = (window.sidecar && window.sidecar.fetch) || fetch;
+
+  let workspace = '';
+  let lastCtxJson = '';
+  let lastTodoJson = '';
+  let currentReport = null;
+  let agentsBundle = null;
+  let selectedAgentView = 'main';
+  let modelsData = { source: 'fallback', models: [] };
+  let configData = null;
+  let editScope = 'global';
+  let saveBanner = '';
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function fmtTok(n) {
+    const num = Number(n) || 0;
+    if (num >= 1e6) { const v = num / 1e6; return Number.isInteger(v) ? `${v}M` : `${v.toFixed(1)}M`; }
+    if (num >= 1e3) return `${(num / 1e3).toFixed(1)}k`;
+    return String(num);
+  }
+
+  function syncSelectTheme(explicitTheme) {
+    let isDark = true;
+    if (explicitTheme === 'light') {
+      isDark = false;
+    } else if (explicitTheme === 'dark') {
+      isDark = true;
+    } else {
+      const rgb = getComputedStyle(document.body).color.match(/\d+/g);
+      if (rgb && rgb.length >= 3) {
+        const lum = (0.299 * Number(rgb[0]) + 0.587 * Number(rgb[1]) + 0.114 * Number(rgb[2]));
+        isDark = lum >= 128;
+      }
+    }
+    const rootStyle = document.documentElement.style;
+    rootStyle.colorScheme = isDark ? 'dark' : 'light';
+    rootStyle.setProperty('--select-bg', isDark ? '#202124' : '#ffffff');
+    rootStyle.setProperty('--select-fg', isDark ? '#e3e3e3' : '#1f1f1f');
+  }
+
+  window.addEventListener('message', (event) => {
+    const msg = event?.data;
+    if (msg && msg.type === 'theme-change' && msg.payload?.theme) {
+      syncSelectTheme(msg.payload.theme);
+    }
+  });
+  new MutationObserver(() => syncSelectTheme()).observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme'] });
+  syncSelectTheme();
+
+  async function apiJson(url, opts) {
+    const res = await doFetch(url, opts);
+    return res.json();
+  }
+
+  // --- 1. Context & Token Usage Renderer ---
+  const SEGMENT_META = [
+    { label: 'System', color: 'var(--c-system)' },
+    { label: 'User', color: 'var(--c-user)' },
+    { label: 'Agent', color: 'var(--c-agent)' },
+    { label: 'Tools', color: 'var(--c-tool)' },
+    { label: 'Custom', color: 'var(--c-custom)' },
+  ];
+
+  function renderContextBar(segments, limit) {
+    const segs = (segments || []).slice(0, 5);
+    const barParts = [];
+    const legParts = [];
+
+    segs.forEach((tok, i) => {
+      if (!tok || tok <= 0) return;
+      const pct = limit > 0 ? Math.max(0.6, (tok / limit) * 100) : 0;
+      const meta = SEGMENT_META[i];
+      barParts.push(`<span class="ctx-seg" style="width:${pct.toFixed(2)}%;background:${meta.color}" title="${meta.label}: ${fmtTok(tok)}"></span>`);
+      legParts.push(`<span class="ctx-leg-item"><span class="ctx-leg-dot" style="background:${meta.color}"></span>${meta.label} <span class="num">${fmtTok(tok)}</span></span>`);
+    });
+
+    return `
+      <div class="ctx-bar" title="Context window breakdown">${barParts.join('')}</div>
+      ${legParts.length ? `<div class="ctx-legend">${legParts.join('')}</div>` : ''}
+    `;
+  }
+
+  function renderAgentSwitcher() {
+    const list = agentsBundle?.agents || [];
+    const subCount = Math.max(0, list.length - 1);
+    const activeRoles = Object.entries(agentsBundle?.activeRoles || {});
+    if (!list.length && !activeRoles.length) return '';
+
+    const opts = [
+      `<option value="main"${selectedAgentView === 'main' ? ' selected' : ''}>Orchestrator (Main)</option>`,
+      `<option value="all"${selectedAgentView === 'all' ? ' selected' : ''}>All Agents (${list.length || 1} tracked)</option>`,
+      ...list.filter((a) => !a.isMain).map((a) =>
+        `<option value="${esc(a.conversationId)}"${selectedAgentView === a.conversationId ? ' selected' : ''}>${esc(a.label)} · ${esc(a.model)}</option>`
+      ),
+    ].join('');
+
+    return `<div class="agent-bar">
+      <select id="agentViewSelect" title="Inspect context & token usage per agent">${opts}</select>
+      ${subCount > 0 ? `<span class="hint num">+${subCount} sub</span>` : ''}
+    </div>`;
+  }
+
+  function renderAllAgentsSummary() {
+    const body = document.getElementById('ctxBody');
+    const updated = document.getElementById('ctxUpdated');
+    const list = agentsBundle?.agents || [];
+    const totals = agentsBundle?.totals || {};
+    const activeRoles = Object.entries(agentsBundle?.activeRoles || {});
+
+    updated.textContent = `${list.length || 1} agent${(list.length || 1) === 1 ? '' : 's'}`;
+
+    const rowsHtml = list.map((a) => {
+      const s = a.tokenUsage?.session || {};
+      return `<div class="agent-row" data-inspect-agent="${a.isMain ? 'main' : esc(a.conversationId)}">
+        <div class="agent-row-main">
+          <div class="agent-row-title">${esc(a.label)}</div>
+          <div class="agent-row-sub">${esc(a.model)} · ${fmtTok(a.usedTokens)} / ${a.limitTokens ? fmtTok(a.limitTokens) : '?'} (${a.usedPct}%)</div>
+        </div>
+        <div class="agent-row-stats num">
+          <div>In ${fmtTok(s.input_tokens)} · Out ${fmtTok(s.output_tokens)}</div>
+          <div class="dim">Cache ${fmtTok(s.cached_tokens)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const roleStatusHtml = activeRoles.length
+      ? `<div class="agents-bar" style="margin-top:8px">${activeRoles.map(([role, info]) =>
+          `<span class="agent-chip ${esc(info.status)}" title="${esc(info.summary || '')}">${esc(role)}: ${esc(info.status)}</span>`
+        ).join('')}</div>`
+      : '';
+
+    body.innerHTML = `
+      ${renderAgentSwitcher()}
+      <div class="io-box" style="margin-bottom:8px">
+        <div class="io-title"><span>Combined Token Usage</span><span class="num">${totals.cache_hit_pct || 0}% cache hit</span></div>
+        <div class="io-metrics">
+          <div class="io-kv"><span class="k">Total In</span><span class="v num">${fmtTok(totals.input_tokens)}</span></div>
+          <div class="io-kv"><span class="k">Total Out</span><span class="v num">${fmtTok(totals.output_tokens)}</span></div>
+          <div class="io-kv"><span class="k">Cached</span><span class="v num">${fmtTok(totals.cached_tokens)}</span></div>
+          <div class="io-kv"><span class="k">Think</span><span class="v num">${fmtTok(totals.thinking_tokens)}</span></div>
+        </div>
+      </div>
+      <div class="agent-list">${rowsHtml || '<p class="empty">No agent conversations discovered yet.</p>'}</div>
+      ${roleStatusHtml}
+    `;
+    wireAgentSwitcher(body);
+  }
+
+  function wireAgentSwitcher(body) {
+    const sel = document.getElementById('agentViewSelect');
+    if (sel) {
+      sel.addEventListener('change', (e) => {
+        selectedAgentView = e.currentTarget.value;
+        lastCtxJson = '';
+        refreshReport();
+      });
+    }
+    body.querySelectorAll('[data-inspect-agent]').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        selectedAgentView = e.currentTarget.dataset.inspectAgent;
+        lastCtxJson = '';
+        refreshReport();
+      });
+    });
+  }
+
+  function renderContext(r) {
+    const body = document.getElementById('ctxBody');
+    const updated = document.getElementById('ctxUpdated');
+    if (selectedAgentView === 'all' && agentsBundle && !agentsBundle.error) {
+      return renderAllAgentsSummary();
+    }
+    if (r.error === 'no-conversation') {
+      updated.textContent = 'Idle';
+      body.innerHTML = '<p class="empty">Open a conversation to monitor context &amp; token usage.</p>';
+      return;
+    }
+    if (r.error === 'no-database') {
+      updated.textContent = 'New';
+      body.innerHTML = '<p class="empty">Send a message to initialize token accounting.</p>';
+      return;
+    }
+    if (r.error) {
+      updated.textContent = 'Error';
+      body.innerHTML = `<p class="empty">${esc(r.message || r.error)}</p>`;
+      return;
+    }
+
+    updated.textContent = new Date(r.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const limit = r.limit_tokens;
+    const tu = r.token_usage || { latest: {}, session: {} };
+    const latest = tu.latest || {};
+    const session = tu.session || {};
+
+    const catRows = (r.categories || []).map((c) => {
+      const color = CONVERSATION[c.key] || (SYSTEM.has(c.key) ? 'var(--c-system)' : 'var(--c-custom)');
+      const shape = CONVERSATION[c.key] ? '' : ' sq';
+      return `<div class="cat-row"><span class="mark${shape}" style="background:${color}"></span><span>${esc(c.name)}</span>`
+        + `<span class="num">${fmtTok(c.tokens)}</span><span class="num dim">${c.pct.toFixed(1)}%</span></div>`;
+    }).join('');
+
+    const freePct = limit ? ((r.free_tokens / limit) * 100).toFixed(1) : '0.0';
+    const freeRow = `<div class="cat-row"><span class="mark free"></span><span class="dim">Free space</span>`
+      + `<span class="num">${fmtTok(r.free_tokens)}</span><span class="num dim">${freePct}%</span></div>`;
+
+    const ckHtml = r.checkpoint_view
+      ? `<div class="hint" style="margin-top:6px">Checkpoint ${r.checkpoint_view.active_number}/${r.checkpoint_view.count}: ${esc(r.checkpoint_view.active_text)}</div>`
+      : '';
+
+    const subagents = (agentsBundle?.agents || []).filter((a) => !a.isMain);
+    const otherAgentsHtml = subagents.length
+      ? `<details class="fold">
+          <summary>Other agents (${subagents.length}) · Combined In ${fmtTok(agentsBundle.totals?.input_tokens)} / Out ${fmtTok(agentsBundle.totals?.output_tokens)}</summary>
+          <div class="agent-list">${subagents.map((a) => {
+            const s = a.tokenUsage?.session || {};
+            return `<div class="agent-row" data-inspect-agent="${esc(a.conversationId)}">
+              <div class="agent-row-main">
+                <div class="agent-row-title">${esc(a.label)}</div>
+                <div class="agent-row-sub">${esc(a.model)} · ${a.usedPct}% ctx</div>
+              </div>
+              <div class="agent-row-stats num">
+                <div>In ${fmtTok(s.input_tokens)} · Out ${fmtTok(s.output_tokens)}</div>
+                <div class="dim">Cache ${fmtTok(s.cached_tokens)}</div>
+              </div>
+            </div>`;
+          }).join('')}</div>
+        </details>`
+      : '';
+
+    body.innerHTML = `
+      ${renderAgentSwitcher()}
+      <div class="ctx-top">
+        <div class="ctx-model" title="${esc(r.model_id || r.model)}">${esc(r.model)}</div>
+        ${limit ? `<span class="ctx-pct num">${r.used_pct.toFixed(1)}%</span>` : ''}
+      </div>
+      <div class="ctx-nums">
+        <span class="big num">${fmtTok(r.used_tokens)}</span>
+        <span class="dim">/ ${limit ? fmtTok(limit) : 'Unknown'} tokens</span>
+        <span class="dim num" style="margin-left:auto;font-size:11px">${limit ? `${fmtTok(r.free_tokens)} free` : ''}</span>
+      </div>
+      ${renderContextBar(r.grid_segments, limit)}
+      <div class="io-grid">
+        <div class="io-box">
+          <div class="io-title"><span>Last Turn</span><span class="num">${latest.cache_hit_pct ? `${latest.cache_hit_pct}% hit` : ''}</span></div>
+          <div class="io-metrics">
+            <div class="io-kv"><span class="k">In</span><span class="v num">${fmtTok(latest.input_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Out</span><span class="v num">${fmtTok(latest.output_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Cached</span><span class="v num">${fmtTok(latest.cached_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Think</span><span class="v num">${fmtTok(latest.thinking_tokens)}</span></div>
+          </div>
+        </div>
+        <div class="io-box">
+          <div class="io-title"><span>Session Total</span><span class="num">${session.generation_count || 0} calls</span></div>
+          <div class="io-metrics">
+            <div class="io-kv"><span class="k">In</span><span class="v num">${fmtTok(session.input_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Out</span><span class="v num">${fmtTok(session.output_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Cached</span><span class="v num">${fmtTok(session.cached_tokens)}</span></div>
+            <div class="io-kv"><span class="k">Hit</span><span class="v num">${(session.cache_hit_pct || 0).toFixed(0)}%</span></div>
+          </div>
+        </div>
+      </div>
+      <details class="fold">
+        <summary>${esc(r.heading || 'Category breakdown')}</summary>
+        <div style="margin-top:6px">${catRows}${freeRow}${ckHtml}</div>
+      </details>
+      ${otherAgentsHtml}
+    `;
+    wireAgentSwitcher(body);
+  }
+
+  // --- 2. Milestones & Todos Renderer ---
+  function renderTodos(state) {
+    const body = document.getElementById('todoBody');
+    const summary = document.getElementById('todoSummary');
+    if (state.error === 'no-workspace') {
+      summary.textContent = 'No workspace';
+      body.innerHTML = '<p class="empty">Open a workspace folder to track milestones and plans/.</p>';
+      return;
+    }
+
+    const agents = Object.entries(state.agents || {});
+    const agentHtml = agents.length
+      ? `<div class="agents-bar">${agents.map(([role, info]) =>
+          `<span class="agent-chip ${esc(info.status)}" title="${esc(info.summary || '')}">${esc(role)}: ${esc(info.status)}</span>`
+        ).join('')}<button type="button" id="clearAgentsBtn" style="padding:1px 6px;font-size:10.5px;margin-left:auto" title="Clear agent status badges">Clear</button></div>`
+      : '';
+
+    const topicKeys = Object.keys(state.topics || {});
+    if (!topicKeys.length) {
+      summary.textContent = '0/0';
+      body.innerHTML = `${agentHtml}<p class="empty">No active plan yet. Run /omg-orchestrator or /omg-plan.</p>`;
+      return;
+    }
+
+    const activeSlug = state.topics[state.activeTopic] ? state.activeTopic : topicKeys[0];
+    const topic = state.topics[activeSlug];
+    const milestones = topic.milestones || [];
+    let totalTodos = 0;
+    let doneTodos = 0;
+    for (const m of milestones) {
+      for (const t of m.todos || []) {
+        totalTodos += 1;
+        if (t.status === 'done') doneTodos += 1;
+      }
+    }
+    const pct = totalTodos ? Math.round((doneTodos / totalTodos) * 100) : 0;
+    summary.textContent = `${doneTodos}/${totalTodos} (${pct}%)`;
+
+    const topicSelector = topicKeys.length > 1
+      ? `<div class="topic-row"><span class="dim">Topic:</span><select id="topicSelect" style="flex:1">${topicKeys.map((k) =>
+          `<option value="${esc(k)}"${k === activeSlug ? ' selected' : ''}>${esc(state.topics[k].title || k)}</option>`
+        ).join('')}</select></div>`
+      : `<div class="topic-row"><strong style="font-size:12px">${esc(topic.title || activeSlug)}</strong>${topic.planDir ? `<span class="hint" style="margin-left:auto">${esc(topic.planDir)}</span>` : ''}</div>`;
+
+    const msHtml = milestones.map((m) => {
+      const mDone = (m.todos || []).filter((t) => t.status === 'done').length;
+      const mTotal = (m.todos || []).length;
+      const todosHtml = (m.todos || []).map((t) => {
+        const checked = t.status === 'done' ? ' checked' : '';
+        return `<li class="todo-item">
+          <input type="checkbox" data-topic="${esc(activeSlug)}" data-ms="${esc(m.id)}" data-todo="${esc(t.id)}"${checked}>
+          <span class="todo-label ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}${t.note ? `<span class="todo-note">${esc(t.note)}</span>` : ''}</span>
+          <span class="todo-role">${esc(t.assignee || 'build')}</span>
+        </li>`;
+      }).join('');
+
+      return `<div class="ms-card">
+        <div class="ms-head">
+          <span class="ms-title" title="${esc(m.title)}">${esc(m.title)}</span>
+          <span class="ms-meta">
+            <span class="hint num">${mDone}/${mTotal}</span>
+            <span class="pill ${esc(m.status)}">${esc(m.status.replace('_', ' '))}</span>
+          </span>
+        </div>
+        ${m.goal ? `<div class="ms-goal">${esc(m.goal)}</div>` : ''}
+        <ul class="todo-list">${todosHtml}</ul>
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `${agentHtml}${topicSelector}<div class="prog-wrap"><div class="prog-fill" style="width:${pct}%"></div></div>${msHtml}`;
+
+    const sel = document.getElementById('topicSelect');
+    if (sel) {
+      sel.addEventListener('change', async (e) => {
+        await apiJson('/api/todos/topic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace, topic: e.target.value }),
+        });
+        lastTodoJson = '';
+        refreshTodos();
+      });
+    }
+
+    const clearBtn = document.getElementById('clearAgentsBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        await apiJson('/api/agents/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace }),
+        });
+        lastTodoJson = '';
+        refreshTodos();
+      });
+    }
+
+    body.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener('change', async (e) => {
+        const el = e.currentTarget;
+        await apiJson('/api/todos/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspace,
+            topic: el.dataset.topic,
+            milestoneId: el.dataset.ms,
+            todoId: el.dataset.todo,
+            status: el.checked ? 'done' : 'pending',
+          }),
+        });
+        lastTodoJson = '';
+        refreshTodos();
+      });
+    });
+  }
+
+  // --- 3. Model Configurator Renderer ---
+  function renderConfig() {
+    if (!configData) return;
+    const body = document.getElementById('cfgBody');
+    const hint = document.getElementById('cfgCatalogHint');
+    hint.textContent = modelsData.source === 'live' ? 'Live Catalog' : 'Fallback Catalog';
+
+    if (editScope === 'workspace' && !workspace) editScope = 'global';
+    const scopeObj = editScope === 'workspace' ? configData.workspaceRaw : configData.globalRaw;
+    const effective = configData.effective;
+    const activeChatModelId = currentReport?.model_id || '';
+    const models = modelsData.models || [];
+
+    const roles = (configData.roles && configData.roles.length) ? configData.roles : DEFAULT_ROLES;
+    const rolesHtml = roles.map((role) => {
+      const effAgent = effective.agents[role];
+      const scopedAgent = scopeObj?.agents?.[role];
+      const selectedModel = scopedAgent?.model || effAgent.model;
+      const selectedBackend = scopedAgent?.backend || effAgent.backend || 'inherit';
+
+      const options = models.some((m) => m.id === selectedModel)
+        ? models
+        : [{ id: selectedModel, displayName: selectedModel, tier: effAgent.tier }, ...models];
+
+      const optHtml = options.map((m) =>
+        `<option value="${esc(m.id)}"${m.id === selectedModel ? ' selected' : ''}>${esc(m.displayName)}</option>`
+      ).join('');
+
+      const mismatchWarn = role === 'orchestrator' && activeChatModelId && activeChatModelId !== effAgent.model
+        ? `<div class="cfg-warn">Active chat uses ${esc(activeChatModelId)}; switch Antigravity's chat selector to match.</div>`
+        : '';
+
+      return `<div class="role-item">
+        <div class="role-top">
+          <span class="role-name">${esc(role)}</span>
+          <span class="tier-badge" title="invoke_subagent fallback tier">${esc(effAgent.tier)}</span>
+        </div>
+        <div class="role-desc">${esc(ROLE_HINTS[role] || '')}</div>
+        <div class="role-controls" style="margin-top:5px">
+          <select data-role-model="${esc(role)}">${optHtml}</select>
+          ${role !== 'orchestrator'
+            ? `<select data-role-backend="${esc(role)}" title="Execution backend">
+                <option value="inherit"${selectedBackend === 'inherit' ? ' selected' : ''}>default (${esc(effective.backend)})</option>
+                <option value="swarm"${selectedBackend === 'swarm' ? ' selected' : ''}>swarm</option>
+                <option value="subagent"${selectedBackend === 'subagent' ? ' selected' : ''}>subagent</option>
+              </select>`
+            : '<span class="hint">main chat</span>'}
+        </div>
+        ${mismatchWarn}
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="cfg-toolbar">
+        <div class="seg">
+          <button type="button" id="scopeGlobal" class="${editScope === 'global' ? 'active' : ''}">Global</button>
+          <button type="button" id="scopeWorkspace" class="${editScope === 'workspace' ? 'active' : ''}"${workspace ? '' : ' disabled'}>Workspace</button>
+        </div>
+        <select id="globalBackend" title="Default worker execution backend">
+          <option value="swarm"${effective.backend === 'swarm' ? ' selected' : ''}>Backend: swarm (exact models)</option>
+          <option value="subagent"${effective.backend === 'subagent' ? ' selected' : ''}>Backend: subagent (tiers)</option>
+        </select>
+      </div>
+      <div class="cfg-row-top">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="confirmMilestones"${effective.confirmBetweenMilestones ? ' checked' : ''}>
+          <span>Confirm between milestones</span>
+        </label>
+        <span class="hint">${editScope === 'workspace' ? '.omg/config.json' : '~/.gemini/config/omg/config.json'}</span>
+      </div>
+      <div class="role-list">${rolesHtml}</div>
+      <div class="cfg-foot">
+        <button type="button" id="resetCfg">Reset Defaults</button>
+        <span class="save-msg" id="saveMsg">${esc(saveBanner)}</span>
+      </div>
+    `;
+
+    async function patchConfig(patch) {
+      try {
+        const res = await apiJson('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: editScope, workspace, patch }),
+        });
+        if (res.ok) {
+          configData = { ...configData, ...res, roles: res.roles || configData?.roles || DEFAULT_ROLES };
+          saveBanner = 'Saved';
+          renderConfig();
+          setTimeout(() => {
+            saveBanner = '';
+            const msg = document.getElementById('saveMsg');
+            if (msg) msg.textContent = '';
+          }, 1600);
+        } else {
+          const msg = document.getElementById('saveMsg');
+          if (msg) msg.textContent = res.message || res.error || 'Save failed';
+        }
+      } catch (err) {
+        const msg = document.getElementById('saveMsg');
+        if (msg) msg.textContent = err?.message || 'Save failed';
+      }
+    }
+
+    document.getElementById('scopeGlobal').addEventListener('click', () => { editScope = 'global'; renderConfig(); });
+    document.getElementById('scopeWorkspace').addEventListener('click', () => { if (workspace) { editScope = 'workspace'; renderConfig(); } });
+    document.getElementById('globalBackend').addEventListener('change', (e) => patchConfig({ backend: e.target.value }));
+    document.getElementById('confirmMilestones').addEventListener('change', (e) => patchConfig({ confirmBetweenMilestones: e.target.checked }));
+    document.getElementById('resetCfg').addEventListener('click', async () => {
+      const res = await apiJson('/api/config/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: editScope, workspace }),
+      });
+      if (res.ok) {
+        configData = res;
+        saveBanner = 'Reset';
+        renderConfig();
+      }
+    });
+
+    body.querySelectorAll('select[data-role-model]').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const role = e.currentTarget.dataset.roleModel;
+        const model = e.currentTarget.value;
+        patchConfig({ agents: { [role]: { model } } });
+      });
+    });
+
+    body.querySelectorAll('select[data-role-backend]').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const role = e.currentTarget.dataset.roleBackend;
+        const backend = e.currentTarget.value;
+        patchConfig({ agents: { [role]: { backend } } });
+      });
+    });
+  }
+
+  // --- Polling Loops ---
+  async function refreshReport() {
+    try {
+      const targetId = selectedAgentView !== 'main' && selectedAgentView !== 'all'
+        ? selectedAgentView
+        : conversationId;
+      const [agentsData, reportData] = await Promise.all([
+        apiJson(`/api/agents?${new URLSearchParams({ conversationId, workspace })}`),
+        selectedAgentView === 'all'
+          ? Promise.resolve(currentReport || {})
+          : apiJson(`/api/report?${new URLSearchParams({ conversationId: targetId, workspace })}`),
+      ]);
+      const combinedJson = JSON.stringify({ selectedAgentView, agentsData, reportData });
+      if (combinedJson !== lastCtxJson) {
+        lastCtxJson = combinedJson;
+        agentsBundle = agentsData;
+        if (targetId === conversationId && !reportData.error) {
+          currentReport = reportData;
+        }
+        renderContext(reportData);
+        renderConfig();
+      }
+    } catch {
+      // Ignore transient poll errors.
+    }
+  }
+
+  async function refreshTodos() {
+    try {
+      const qs = new URLSearchParams({ workspace });
+      const data = await apiJson(`/api/todos?${qs}`);
+      const json = JSON.stringify(data);
+      if (json !== lastTodoJson) {
+        lastTodoJson = json;
+        renderTodos(data);
+      }
+    } catch {
+      // Ignore transient poll errors.
+    }
+  }
+
+  async function loadConfigAndModels() {
+    try {
+      const [m, c] = await Promise.all([
+        apiJson('/api/models'),
+        apiJson(`/api/config?${new URLSearchParams({ workspace })}`),
+      ]);
+      modelsData = m;
+      configData = c;
+      renderConfig();
+    } catch {
+      // Retry on next poll if needed.
+    }
+  }
+
+  async function refreshAll() {
+    if (document.hidden) return;
+    await Promise.all([refreshReport(), refreshTodos()]);
+  }
+
+  document.addEventListener('visibilitychange', refreshAll);
+
+  async function start() {
+    if (window.sidecar && window.sidecar.getWorkspaceUris) {
+      const uris = await window.sidecar.getWorkspaceUris();
+      workspace = uris[0] || '';
+      window.sidecar.onWorkspaceChange((next) => {
+        if ((next[0] || '') !== workspace) {
+          workspace = next[0] || '';
+          lastCtxJson = '';
+          lastTodoJson = '';
+          loadConfigAndModels();
+          refreshAll();
+        }
+      });
+    }
+    await loadConfigAndModels();
+    await refreshAll();
+    setInterval(refreshAll, POLL_MS);
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

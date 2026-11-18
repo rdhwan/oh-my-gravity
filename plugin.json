@@ -1,0 +1,12 @@
+{
+  "name": "omg",
+  "displayName": "oh-my-gravity (OMG)",
+  "version": "0.1.0",
+  "description": "Multi-agent orchestrator with tiered swarm/subagent handoffs, milestone plans, live context & input/output/cached token monitoring, todo tracking, and sidebar model configuration.",
+  "logo": "logos/omg.png",
+  "suggestedPrompts": [
+    "/omg-orchestrator Build a new feature with scout, milestone plan, execution, and oracle review",
+    "/omg-plan Scout the codebase and draft a milestone plan in plans/",
+    "/omg-explore Find where authentication and routing are implemented"
+  ]
+}

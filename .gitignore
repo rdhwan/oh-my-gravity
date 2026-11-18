@@ -1,0 +1,6 @@
+study-materials/
+.omg/
+sidecars/omg-panel/.data/
+node_modules/
+__pycache__/
+*.pyc
